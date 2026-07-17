@@ -17,6 +17,13 @@ const PlayerSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
+  username: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    lowercase: true
+  },
   profile_picture_url: {
     type: String,
     default: ""

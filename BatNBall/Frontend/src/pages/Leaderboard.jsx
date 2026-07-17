@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import Navigation from '../components/Navigation';
-import { Award, Zap, Shield, Trophy } from 'lucide-react';
+import { Award, Zap, Shield, Trophy, Search } from 'lucide-react';
 
 const API = 'http://localhost:5000/api/v1';
 
 const Leaderboard = () => {
+  const navigate = useNavigate();
+  
   const [activeTab, setActiveTab] = useState('orange'); // 'orange' | 'purple' | 'chase'
   const [capsData, setCapsData] = useState({ batters: [], bowlers: [] });
   const [chaseData, setChaseData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Player search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -33,6 +41,27 @@ const Leaderboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Player search logic
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      axios.get(`${API}/players/search?q=${searchQuery}`)
+        .then(res => {
+          setSearchResults(res.data);
+          setSearchLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setSearchLoading(false);
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const getBattingAvg = (runs, innings, notOuts) => {
     const dismissals = innings - notOuts;
@@ -67,10 +96,89 @@ const Leaderboard = () => {
         width: '100%',
         boxSizing: 'border-box'
       }}>
-        {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
-          <Trophy size={28} style={{ color: 'var(--accent-color)' }} />
-          <h2 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0 }}>Tournament Leaderboards</h2>
+        {/* Title with Search */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Trophy size={28} style={{ color: 'var(--accent-color)' }} />
+            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0 }}>Tournament Leaderboards</h2>
+          </div>
+
+          {/* Search Player Directory */}
+          <div style={{ position: 'relative', width: '280px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.4rem 0.8rem', backgroundColor: 'var(--card-bg)' }}>
+              <Search size={16} style={{ color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                placeholder="Search player username..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ border: 'none', background: 'none', outline: 'none', width: '100%', padding: '0.1rem 0', color: 'var(--text-color)', fontSize: '0.82rem' }}
+              />
+            </div>
+
+            {searchQuery && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'var(--dominant-color)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                zIndex: 100,
+                maxHeight: '250px',
+                overflowY: 'auto',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                marginTop: '0.5rem'
+              }}>
+                {searchLoading ? (
+                  <div style={{ padding: '0.8rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>Searching...</div>
+                ) : searchResults.length === 0 ? (
+                  <div style={{ padding: '0.8rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>No players found</div>
+                ) : (
+                  searchResults.map(p => (
+                    <div
+                      key={p._id}
+                      onClick={() => {
+                        setSearchQuery('');
+                        navigate(`/players/${p._id}`);
+                      }}
+                      style={{
+                        padding: '0.8rem',
+                        borderBottom: '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'background-color 0.2s ease',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(29,79,42,0.05)'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div>
+                        <strong style={{ display: 'block', color: 'var(--text-color)', fontSize: '0.82rem' }}>{p.first_name} {p.last_name} ({p.display_name})</strong>
+                        {p.username && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>@{p.username}</span>}
+                      </div>
+                      <span style={{ 
+                        fontSize: '0.65rem', 
+                        fontWeight: '700', 
+                        padding: '0.15rem 0.3rem', 
+                        backgroundColor: 'var(--border-color)', 
+                        borderRadius: '4px',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {(p.player_roles?.[0] || 'Player')
+                          .toLowerCase()
+                          .split('_')
+                          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                          .join(' ')}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -180,8 +288,16 @@ const Leaderboard = () => {
 
                       {/* Name */}
                       <div>
-                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {item.player_id?.display_name}
+                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <Link 
+                            to={`/players/${item.player_id?._id}`} 
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                            onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            {item.player_id?.display_name}
+                          </Link>
+                          {item.player_id?.username && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '500' }}>@{item.player_id.username}</span>}
                           {isWinner && <Award size={16} style={{ color: '#ea580c' }} />}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -281,8 +397,16 @@ const Leaderboard = () => {
 
                       {/* Name */}
                       <div>
-                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {item.player_id?.display_name}
+                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <Link 
+                            to={`/players/${item.player_id?._id}`} 
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                            onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            {item.player_id?.display_name}
+                          </Link>
+                          {item.player_id?.username && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '500' }}>@{item.player_id.username}</span>}
                           {isWinner && <Award size={16} style={{ color: '#7e22ce' }} />}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -382,8 +506,16 @@ const Leaderboard = () => {
 
                       {/* Name */}
                       <div>
-                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {item.player?.display_name}
+                        <div style={{ fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <Link 
+                            to={`/players/${item.player?._id}`} 
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                            onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                            onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                          >
+                            {item.player?.display_name}
+                          </Link>
+                          {item.player?.username && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '500' }}>@{item.player.username}</span>}
                           {isWinner && <Zap size={16} style={{ color: '#2a9d8f' }} />}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

@@ -4,7 +4,7 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import {
   Shield, Zap, AlertTriangle, Play, Award, CheckCircle, 
-  ChevronRight, RefreshCw, Users, HelpCircle
+  ChevronRight, RefreshCw, Users, HelpCircle, Share2
 } from 'lucide-react';
 import Navigation from '../components/Navigation';
 
@@ -85,6 +85,18 @@ const VisitorDashboard = () => {
   const [boundaryFlash, setBoundaryFlash] = useState(null); // 'FOUR' | 'SIX' | null
   const [scoreGlow, setScoreGlow] = useState(false);
 
+  // Share link states
+  const [copied, setCopied] = useState(false);
+
+  // Responsive Grid State
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // ─── Fetch Match Data ────────────────────────────────────────────────────────
   const fetchScorecard = async () => {
     try {
@@ -96,12 +108,6 @@ const VisitorDashboard = () => {
       if (data.match?.current_innings) {
         setScorecardInnings(data.match.current_innings);
       }
-      
-      // Fetch active partnership
-      const activePart = await axios.get(`${API}/matches/${matchId}/score/scorecard`).then(async () => {
-        // Active partnership is calculated dynamically or fetched
-        // To be safe, we calculate it or just wait for WS. Let's find latest unbroken in balls or compute it.
-      });
     } catch (err) {
       setError(err.response?.data?.error || 'Match details could not be loaded');
     } finally {
@@ -156,6 +162,12 @@ const VisitorDashboard = () => {
     prevLastBallIdRef.current = lastBall._id;
   }, [balls]);
 
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   // ─── Compile Scorecard on the fly from balls log ─────────────────────────────
   const compileScorecard = (inningsNum) => {
     const inningsBalls = balls.filter(b => b.innings_number === inningsNum);
@@ -195,7 +207,6 @@ const VisitorDashboard = () => {
           if (ball.is_boundary && ball.boundary_type === 'FOUR') batsmanStats[strikerId].fours += 1;
           if (ball.is_boundary && ball.boundary_type === 'SIX') batsmanStats[strikerId].sixes += 1;
         } else if (ball.extra_type === 'NO_BALL') {
-          // No-ball counts towards batsman balls faced and runs scored
           batsmanStats[strikerId].balls += 1;
           batsmanStats[strikerId].runs += ball.runs_from_bat;
           if (ball.is_boundary && ball.boundary_type === 'FOUR') batsmanStats[strikerId].fours += 1;
@@ -361,7 +372,7 @@ const VisitorDashboard = () => {
         }
       `}} />
 
-      <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '0 1.5rem', boxSizing: 'border-box' }}>
+      <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1.5rem', boxSizing: 'border-box' }}>
         
         {/* Match Header Info */}
         <div className="glass" style={{
@@ -373,7 +384,7 @@ const VisitorDashboard = () => {
           transition: 'all 0.2s ease'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
               {match?.match_status === 'LIVE' ? (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '0.35rem',
@@ -384,6 +395,22 @@ const VisitorDashboard = () => {
                 }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
                   Live Broadcast
+                </div>
+              ) : match?.match_status === 'COMPLETED' ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: 'rgba(29, 79, 42, 0.1)',
+                  color: 'var(--secondary-color)',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '20px',
+                  fontSize: '0.7rem',
+                  fontWeight: '700',
+                  textTransform: 'uppercase'
+                }}>
+                  <CheckCircle size={10} />
+                  Completed
                 </div>
               ) : (
                 <div style={{
@@ -399,9 +426,51 @@ const VisitorDashboard = () => {
               <Shield size={20} style={{ color: 'var(--accent-color)' }} />
               {match?.team_first_id?.team_name} vs {match?.team_second_id?.team_name}
             </h1>
+            {match?.match_status === 'COMPLETED' && (
+              <p style={{ fontSize: '0.85rem', color: 'var(--secondary-color)', fontWeight: '750', marginTop: '0.3rem' }}>
+                {(() => {
+                  if (!match.winner_team_id) {
+                    return match.result_type === 'TIE' ? 'Match Tied' : 'No Result / Draw';
+                  }
+                  const winnerName = match.winner_team_id.team_name || 'Winner';
+                  const margin = match.win_margin || 0;
+                  const resType = match.result_type ? match.result_type.toLowerCase() : 'runs';
+                  return `Result: ${winnerName} won by ${margin} ${resType}`;
+                })()}
+              </p>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button 
+              onClick={handleShare} 
+              style={{
+                background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)',
+                color: 'var(--text-color)', width: '36px', height: '36px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                position: 'relative'
+              }}
+              title="Share match link"
+            >
+              <Share2 size={14} />
+              {copied && (
+                <span style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  right: 0,
+                  backgroundColor: 'var(--secondary-color)',
+                  color: '#fff',
+                  fontSize: '0.65rem',
+                  padding: '0.2rem 0.4rem',
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap',
+                  marginBottom: '0.5rem',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                }}>
+                  Link copied!
+                </span>
+              )}
+            </button>
             <button 
               onClick={fetchScorecard} 
               style={{
@@ -423,7 +492,8 @@ const VisitorDashboard = () => {
         }}>
           {[
             { id: 'live', name: 'Live Tracking' },
-            { id: 'scorecard', name: 'Full Scorecard' }
+            { id: 'scorecard', name: 'Full Scorecard' },
+            { id: 'squads', name: 'Playing Squads' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -448,222 +518,338 @@ const VisitorDashboard = () => {
           ))}
         </div>
 
-        {/* ── LIVE TRACKING TAB ──────────────────────────────────────────────── */}
-        {activeTab === 'live' && (
-          <>
-            {/* Scoreboard block */}
-            <div className="glass" style={{
-              padding: '1.5rem', marginBottom: '1.25rem',
-              border: boundaryFlash ? '1px solid var(--accent-color)' : '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <ScorePill
-                  label={match?.current_innings_batting_team_id?.team_short_name || 'TEAM'}
-                  value={`${currentInnings.score ?? 0}/${currentInnings.wickets ?? 0}`}
-                  sub={`${formatOvers(currentInnings.total_legal_balls ?? 0)} ov`}
-                />
-                
-                {innings === 2 && (
-                  <>
-                    <ScorePill label="Target" value={targetVal} />
+            {/* ── LIVE TRACKING TAB ──────────────────────────────────────────────── */}
+            {activeTab === 'live' && (
+              <>
+                {/* Scoreboard block */}
+                <div className="glass" style={{
+                  padding: '1.5rem', marginBottom: '1.25rem',
+                  border: boundaryFlash ? '1px solid var(--accent-color)' : '1px solid var(--border-color)'
+                }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                     <ScorePill
-                      label="Need"
-                      value={Math.max(0, targetVal - (currentInnings.score ?? 0))}
-                      sub={`in ${Math.max(0, (match?.total_overs_per_innings * 6) - (currentInnings.total_legal_balls ?? 0))} balls`}
+                      label={match?.current_innings_batting_team_id?.team_short_name || 'TEAM'}
+                      value={`${currentInnings.score ?? 0}/${currentInnings.wickets ?? 0}`}
+                      sub={`${formatOvers(currentInnings.total_legal_balls ?? 0)} ov`}
                     />
-                  </>
-                )}
+                    
+                    {innings === 2 && (
+                      <>
+                        <ScorePill label="Target" value={targetVal} />
+                        <ScorePill
+                          label="Need"
+                          value={Math.max(0, targetVal - (currentInnings.score ?? 0))}
+                          sub={`in ${Math.max(0, (match?.total_overs_per_innings * 6) - (currentInnings.total_legal_balls ?? 0))} balls`}
+                        />
+                      </>
+                    )}
 
-                <ScorePill
-                  label="CRR"
-                  value={currentInnings.total_legal_balls ? ((currentInnings.score / currentInnings.total_legal_balls) * 6).toFixed(2) : '0.00'}
-                  sub="curr rate"
-                />
-              </div>
-
-              {/* Recent balls */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.25rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Current Over:</span>
-                {recentBalls.length === 0
-                  ? <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Waiting for first ball...</span>
-                  : recentBalls.map((b, i) => <BallChip key={b._id || i} ball={b} />)
-                }
-              </div>
-            </div>
-
-            {/* Crease Batsmen / Bowler */}
-            <div className="glass" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
-              <div className="crease-grid">
-                {/* Striker */}
-                <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.15)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '0.25rem' }}>
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22c55e' }} />
-                    <span style={{ fontSize: '0.65rem', color: '#22c55e', fontWeight: '700', textTransform: 'uppercase' }}>Striker</span>
+                    <ScorePill
+                      label="CRR"
+                      value={currentInnings.total_legal_balls ? ((currentInnings.score / currentInnings.total_legal_balls) * 6).toFixed(2) : '0.00'}
+                      sub="curr rate"
+                    />
                   </div>
-                  <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
-                    {striker?.display_name || <span style={{ color: 'var(--text-muted)' }}>No batter</span>}
+
+                  {/* Recent balls */}
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Current Over:</span>
+                    {recentBalls.length === 0
+                      ? <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Waiting for first ball...</span>
+                      : recentBalls.map((b, i) => <BallChip key={b._id || i} ball={b} />)
+                    }
                   </div>
                 </div>
 
-                {/* Non-Striker */}
-                <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Non-Striker</div>
-                  <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
-                    {nonStriker?.display_name || <span style={{ color: 'var(--text-muted)' }}>No batter</span>}
-                  </div>
-                </div>
-
-                {/* Bowler */}
-                <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
-                  <div style={{ fontSize: '0.65rem', color: '#f59e0b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Bowler</div>
-                  <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
-                    {bowler?.display_name || <span style={{ color: 'var(--text-muted)' }}>No bowler</span>}
-                  </div>
-                  {crease.legal_balls_this_over !== undefined && (
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                      {crease.legal_balls_this_over}/6 balls
+                {/* Crease Batsmen / Bowler */}
+                <div className="glass" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
+                  <div className="crease-grid">
+                    {/* Striker */}
+                    <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.15)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '0.25rem' }}>
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22c55e' }} />
+                        <span style={{ fontSize: '0.65rem', color: '#22c55e', fontWeight: '700', textTransform: 'uppercase' }}>Striker</span>
+                      </div>
+                      <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
+                        {striker?.display_name || <span style={{ color: 'var(--text-muted)' }}>No batter</span>}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {/* Active Partnership Card */}
-            {partnership ? (
-              <div className="glass" style={{ padding: '1.25rem', marginBottom: '1.25rem', textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                  <Users size={14} style={{ color: 'var(--accent-color)' }} />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Active Partnership</span>
+                    {/* Non-Striker */}
+                    <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Non-Striker</div>
+                      <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
+                        {nonStriker?.display_name || <span style={{ color: 'var(--text-muted)' }}>No batter</span>}
+                      </div>
+                    </div>
+
+                    {/* Bowler */}
+                    <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                      <div style={{ fontSize: '0.65rem', color: '#f59e0b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Bowler</div>
+                      <div style={{ fontWeight: '750', fontSize: '0.9rem' }}>
+                        {bowler?.display_name || <span style={{ color: 'var(--text-muted)' }}>No bowler</span>}
+                      </div>
+                      {crease.legal_balls_this_over !== undefined && (
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          {crease.legal_balls_this_over}/6 balls
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: '1.15rem', fontWeight: '800' }}>
-                  {partnership.total_runs_scored} runs <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-muted)' }}>({partnership.total_balls_faced} balls)</span>
+
+                {/* Active Partnership Card */}
+                {partnership ? (
+                  <div className="glass" style={{ padding: '1.25rem', marginBottom: '1.25rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                      <Users size={14} style={{ color: 'var(--accent-color)' }} />
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Active Partnership</span>
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: '800' }}>
+                      {partnership.total_runs_scored} runs <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-muted)' }}>({partnership.total_balls_faced} balls)</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <div>{partnership.batsman_1_id?.display_name}: {partnership.runs_by_batsman_1} ({partnership.balls_by_batsman_1})</div>
+                      <div>{partnership.batsman_2_id?.display_name}: {partnership.runs_by_batsman_2} ({partnership.balls_by_batsman_2})</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="glass" style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.82rem', marginBottom: '1.25rem' }}>
+                    No active partnership logged
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── FULL SCORECARD TAB ─────────────────────────────────────────────── */}
+            {activeTab === 'scorecard' && (
+              <div className="glass" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
+                
+                {/* Innings Selector inside scorecard */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                  {[1, 2].map(inn => {
+                    const team = inn === 1 ? match?.team_first_id : match?.team_second_id;
+                    const scoreObj = inn === 1 ? match?.innings1 : match?.innings2;
+                    return (
+                      <button
+                        key={inn}
+                        onClick={() => setScorecardInnings(inn)}
+                        style={{
+                          flex: 1, padding: '0.6rem', borderRadius: '8px',
+                          background: scorecardInnings === inn ? 'var(--secondary-color)' : 'rgba(255,255,255,0.03)',
+                          color: scorecardInnings === inn ? '#fff' : 'var(--text-muted)',
+                          border: '1px solid var(--border-color)',
+                          fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {team?.team_short_name} {scoreObj?.score}/{scoreObj?.wickets} ({formatOvers(scoreObj?.total_legal_balls ?? 0)} ov)
+                      </button>
+                    );
+                  })}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <div>{partnership.batsman_1_id?.display_name}: {partnership.runs_by_batsman_1} ({partnership.balls_by_batsman_1})</div>
-                  <div>{partnership.batsman_2_id?.display_name}: {partnership.runs_by_batsman_2} ({partnership.balls_by_batsman_2})</div>
+
+                {/* Batting Card Table */}
+                <h3 style={{ fontSize: '0.9rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--secondary-color)', textTransform: 'uppercase' }}>Batting</h3>
+                <div style={{ overflowX: 'auto', marginBottom: '1.75rem' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '0.5rem 0.25rem' }}>Batter</th>
+                        <th style={{ padding: '0.5rem 0.25rem' }}>Status</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>R</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>B</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>4s</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>6s</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>SR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scorecardData.batsmen.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No batting stats available</td>
+                        </tr>
+                      ) : (
+                        scorecardData.batsmen.map((b, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                            <td style={{ padding: '0.6rem 0.25rem', fontWeight: '600' }}>{b.name}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', color: 'var(--text-muted)' }}>{b.dismissalText}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.runs}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.balls}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.fours}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.sixes}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{calcStrikeRate(b.runs, b.balls)}</td>
+                          </tr>
+                        ))
+                      )}
+                      {/* Extras Row */}
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', fontWeight: '600' }}>
+                        <td style={{ padding: '0.6rem 0.25rem' }}>Extras</td>
+                        <td style={{ padding: '0.6rem 0.25rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          (wd {scorecardData.extras.wides}, nb {scorecardData.extras.noBalls}, b {scorecardData.extras.byes}, lb {scorecardData.extras.legByes})
+                        </td>
+                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{scorecardData.extras.total}</td>
+                        <td colSpan="4"></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            ) : (
-              <div className="glass" style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.82rem' }}>
-                No active partnership logged
+
+                {/* Bowling Card Table */}
+                <h3 style={{ fontSize: '0.9rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--secondary-color)', textTransform: 'uppercase' }}>Bowling</h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '0.5rem 0.25rem' }}>Bowler</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>O</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>M</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>R</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>W</th>
+                        <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>Econ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scorecardData.bowlers.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No bowling stats available</td>
+                        </tr>
+                      ) : (
+                        scorecardData.bowlers.map((b, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                            <td style={{ padding: '0.6rem 0.25rem', fontWeight: '600' }}>{b.name}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{formatOvers(b.legalBalls)}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.maidens}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.runs}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.wickets}</td>
+                            <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{calcEconomy(b.runs, b.legalBalls)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
               </div>
             )}
-          </>
-        )}
 
-        {/* ── FULL SCORECARD TAB ─────────────────────────────────────────────── */}
-        {activeTab === 'scorecard' && (
-          <div className="glass" style={{ padding: '1.5rem' }}>
-            
-            {/* Innings Selector inside scorecard */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              {[1, 2].map(inn => {
-                const team = inn === 1 ? match?.team_first_id : match?.team_second_id;
-                const scoreObj = inn === 1 ? match?.innings1 : match?.innings2;
-                return (
-                  <button
-                    key={inn}
-                    onClick={() => setScorecardInnings(inn)}
-                    style={{
-                      flex: 1, padding: '0.6rem', borderRadius: '8px',
-                      background: scorecardInnings === inn ? 'var(--secondary-color)' : 'rgba(255,255,255,0.03)',
-                      color: scorecardInnings === inn ? '#fff' : 'var(--text-muted)',
-                      border: '1px solid var(--border-color)',
-                      fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {team?.team_short_name} {scoreObj?.score}/{scoreObj?.wickets} ({formatOvers(scoreObj?.total_legal_balls ?? 0)} ov)
-                  </button>
-                );
-              })}
-            </div>
+            {/* ── PLAYING SQUADS TAB ────────────────────────────────────────────── */}
+            {activeTab === 'squads' && (
+              <div className="glass" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+                  
+                  {/* Team 1 XI */}
+                  <div>
+                    <h3 style={{
+                      fontSize: '1rem',
+                      fontWeight: '800',
+                      borderBottom: '2px solid var(--secondary-color)',
+                      paddingBottom: '0.5rem',
+                      color: 'var(--secondary-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      marginBottom: '1rem'
+                    }}>
+                      <Users size={18} />
+                      {match?.team_first_id?.team_name}
+                    </h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {match?.playing_xi_team_first && match.playing_xi_team_first.length > 0 ? (
+                        match.playing_xi_team_first.map((player, index) => (
+                          <li key={player._id} style={{
+                            fontSize: '0.85rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.4rem 0.6rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.02)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '18px' }}>{index + 1}</span>
+                              <strong style={{ color: 'var(--text-color)' }}>{player.display_name}</strong>
+                              {player.username && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{player.username}</span>}
+                            </div>
+                            <span style={{ 
+                              fontSize: '0.7rem', 
+                              fontWeight: '700', 
+                              padding: '0.15rem 0.4rem', 
+                              backgroundColor: 'var(--border-color)', 
+                              borderRadius: '4px',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {(player.player_roles?.[0] || 'Player')
+                                .toLowerCase()
+                                .split('_')
+                                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                                .join(' ')}
+                            </span>
+                          </li>
+                        ))
+                      ) : (
+                        <li style={{ fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No players joined this roster yet</li>
+                      )}
+                    </ul>
+                  </div>
 
-            {/* Batting Card Table */}
-            <h3 style={{ fontSize: '0.9rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--secondary-color)', textTransform: 'uppercase' }}>Batting</h3>
-            <div style={{ overflowX: 'auto', marginBottom: '1.75rem' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '0.5rem 0.25rem' }}>Batter</th>
-                    <th style={{ padding: '0.5rem 0.25rem' }}>Status</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>R</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>B</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>4s</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>6s</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>SR</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorecardData.batsmen.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No batting stats available</td>
-                    </tr>
-                  ) : (
-                    scorecardData.batsmen.map((b, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                        <td style={{ padding: '0.6rem 0.25rem', fontWeight: '600' }}>{b.name}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', color: 'var(--text-muted)' }}>{b.dismissalText}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.runs}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.balls}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.fours}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.sixes}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{calcStrikeRate(b.runs, b.balls)}</td>
-                      </tr>
-                    ))
-                  )}
-                  {/* Extras Row */}
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', fontWeight: '600' }}>
-                    <td style={{ padding: '0.6rem 0.25rem' }}>Extras</td>
-                    <td style={{ padding: '0.6rem 0.25rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                      (wd {scorecardData.extras.wides}, nb {scorecardData.extras.noBalls}, b {scorecardData.extras.byes}, lb {scorecardData.extras.legByes})
-                    </td>
-                    <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{scorecardData.extras.total}</td>
-                    <td colSpan="4"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  {/* Team 2 XI */}
+                  <div>
+                    <h3 style={{
+                      fontSize: '1rem',
+                      fontWeight: '800',
+                      borderBottom: '2px solid var(--accent-color)',
+                      paddingBottom: '0.5rem',
+                      color: 'var(--secondary-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      marginBottom: '1rem'
+                    }}>
+                      <Users size={18} />
+                      {match?.team_second_id?.team_name}
+                    </h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {match?.playing_xi_team_second && match.playing_xi_team_second.length > 0 ? (
+                        match.playing_xi_team_second.map((player, index) => (
+                          <li key={player._id} style={{
+                            fontSize: '0.85rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.4rem 0.6rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.02)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '18px' }}>{index + 1}</span>
+                              <strong style={{ color: 'var(--text-color)' }}>{player.display_name}</strong>
+                              {player.username && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{player.username}</span>}
+                            </div>
+                            <span style={{ 
+                              fontSize: '0.7rem', 
+                              fontWeight: '700', 
+                              padding: '0.15rem 0.4rem', 
+                              backgroundColor: 'var(--border-color)', 
+                              borderRadius: '4px',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {(player.player_roles?.[0] || 'Player')
+                                .toLowerCase()
+                                .split('_')
+                                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                                .join(' ')}
+                            </span>
+                          </li>
+                        ))
+                      ) : (
+                        <li style={{ fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No players joined this roster yet</li>
+                      )}
+                    </ul>
+                  </div>
 
-            {/* Bowling Card Table */}
-            <h3 style={{ fontSize: '0.9rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--secondary-color)', textTransform: 'uppercase' }}>Bowling</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '0.5rem 0.25rem' }}>Bowler</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>O</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>M</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>R</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>W</th>
-                    <th style={{ padding: '0.5rem 0.25rem', textAlign: 'right' }}>Econ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorecardData.bowlers.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No bowling stats available</td>
-                    </tr>
-                  ) : (
-                    scorecardData.bowlers.map((b, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                        <td style={{ padding: '0.6rem 0.25rem', fontWeight: '600' }}>{b.name}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{formatOvers(b.legalBalls)}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.maidens}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.runs}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', fontWeight: '700' }}>{b.wickets}</td>
-                        <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{calcEconomy(b.runs, b.legalBalls)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
+                </div>
+              </div>
+            )}
           </div>
-        )}
-
-      </div>
     </>
   );
 };

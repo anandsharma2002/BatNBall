@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Player = require('../models/Player');
 
 // Simple in-memory storage for OTPs (phone_number -> { otp, expires })
 const otpStore = new Map();
@@ -10,12 +11,22 @@ const login = async (req, res) => {
     const { phone_number, password } = req.body;
 
     if (!phone_number || !password) {
-      return res.status(400).json({ error: 'Phone number and password are required' });
+      return res.status(400).json({ error: 'Username/Phone number and password are required' });
     }
 
-    const user = await User.findOne({ phone_number });
+    // Try to find user by phone number
+    let user = await User.findOne({ phone_number: phone_number.trim() });
+    
+    // If not found, try to find player by username (case-insensitive) and link to user
     if (!user) {
-      return res.status(401).json({ error: 'Invalid phone number or password' });
+      const player = await Player.findOne({ username: phone_number.trim().toLowerCase() });
+      if (player) {
+        user = await User.findOne({ associated_player_id: player._id });
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username/phone number or password' });
     }
 
     if (user.account_status !== 'ACTIVE') {

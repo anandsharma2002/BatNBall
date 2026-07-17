@@ -12,6 +12,8 @@ import ScoringBoard from './pages/ScoringBoard';
 import VisitorDashboard from './pages/VisitorDashboard';
 import Leaderboard from './pages/Leaderboard';
 import PlayerProfile from './pages/PlayerProfile';
+import Settings from './pages/Settings';
+import CreateUser from './pages/CreateUser';
 
 import ThemeToggle from './components/ThemeToggle';
 
@@ -35,6 +37,8 @@ function App() {
             <Route path="/matches/new" element={<CreateMatchWizard />} />
             <Route path="/matches/:matchId/score" element={<ScoringBoard />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/create-user" element={<CreateUser />} />
           </Route>
 
           {/* Root Redirect to Dashboard */}

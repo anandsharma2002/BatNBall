@@ -292,11 +292,49 @@ const updateUmpires = async (req, res) => {
   }
 };
 
+const getAllMatches = async (req, res) => {
+  try {
+    const matches = await Match.find()
+      .populate('team_first_id')
+      .populate('team_second_id')
+      .populate('winner_team_id')
+      .populate('created_by', 'phone_number');
+    
+    // Status prioritization:
+    // Group 0: LIVE, PAUSED, RAIN_DELAY (Live matches first at top)
+    // Group 1: UPCOMING (Upcoming/created matches)
+    // Group 2: COMPLETED, ABANDONED (Completed matches last at bottom)
+    const getStatusGroup = (status) => {
+      if (['LIVE', 'PAUSED', 'RAIN_DELAY'].includes(status)) return 0;
+      if (status === 'UPCOMING') return 1;
+      return 2; // COMPLETED, ABANDONED or default
+    };
+
+    matches.sort((a, b) => {
+      const groupA = getStatusGroup(a.match_status);
+      const groupB = getStatusGroup(b.match_status);
+      
+      if (groupA !== groupB) {
+        return groupA - groupB;
+      }
+      
+      // Inside same group, sort by createdAt descending (most recent first)
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    return res.status(200).json(matches);
+  } catch (error) {
+    console.error('Get all matches error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   createMatch,
   getMatchById,
   getShareLink,
   joinMatchRoster,
   updateToss,
-  updateUmpires
+  updateUmpires,
+  getAllMatches
 };

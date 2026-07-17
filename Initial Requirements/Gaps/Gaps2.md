@@ -18,7 +18,6 @@
     - Player can Login/Signup using UserName as well.
     - UserName must be Unique (One and only).
 
-
 8. In the Dashboard, add the list of Matches that are in the order of :
     - Create Match Time (Ascending) -> Most Recent at top
     - then Live matches -> Live match comes first at top
@@ -26,10 +25,17 @@
     - Show matches with Result if it is completed.
 
 9. Add a share button of the live match, Like How can a player see the running match.
-    - Add a share button of the Live Match in the Live Match page. 
+    - Add a share button of the Live Match in the Live Match page.
     - Also user can click on the Match card which is visible in dashboard and go to the live match page.
 
 10. Current Live Match page `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 3.png`
     I want that It should be looks like this  `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 4.png` Make you to use Color Theme of our application but UI should be looks like this.
 
+    - Make sure that If a match is already completed then it should be show result and status like: Upcoming, Live, Completed. in the card.
 
+11. Add a Scorboard to the live match page. it should be like this `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 5.png` and `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 6.png` and `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 7.png` and `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 8.png`.
+
+Make you to use Color Theme of our application but UI should be looks like this.
+
+1. Add a Players section with parallel to the scroboard just like in image.
+`D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 9.png` and `D:\D\study\Projects\Cricket\Initial Requirements\Gaps\Images\image copy 10.png`. User can see the playing players in  the players section of each team.

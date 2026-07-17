@@ -141,13 +141,21 @@ const PlayerProfile = () => {
               {player.first_name} {player.last_name}
               <Shield size={20} style={{ color: 'var(--accent-color)' }} />
             </h1>
-            <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--secondary-color)', margin: '0.2rem 0' }}>
-              {player.display_name}
+            <p style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--secondary-color)', margin: '0.2rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>{player.display_name}</span>
+              {player.username && <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>@{player.username}</span>}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
               {player.player_roles?.map(r => (
-                <span key={r} style={{ fontSize: '0.75rem', fontWeight: '700', padding: '0.25rem 0.6rem', backgroundColor: 'var(--border-color)', borderRadius: '4px' }}>
-                  {r.replace('_', ' ')}
+                <span key={r} style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '700', 
+                  padding: '0.25rem 0.6rem', 
+                  backgroundColor: 'var(--border-color)', 
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {r.toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                 </span>
               ))}
             </div>

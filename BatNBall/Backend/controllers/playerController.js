@@ -9,13 +9,14 @@ const searchPlayers = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    // Search by display name, first name, or last name (case-insensitive regex)
+    // Search by display name, first name, last name, or username (case-insensitive regex)
     const regex = new RegExp(q, 'i');
     const players = await Player.find({
       $or: [
         { display_name: regex },
         { first_name: regex },
-        { last_name: regex }
+        { last_name: regex },
+        { username: regex }
       ]
     }).limit(15);
 
@@ -49,11 +50,23 @@ const updatePlayer = async (req, res) => {
       return res.status(403).json({ error: 'Access Denied: You can only edit your own profile' });
     }
 
-    const { first_name, last_name, display_name, date_of_birth, batting_style, bowling_style, player_roles } = req.body;
+    const { first_name, last_name, display_name, username, date_of_birth, batting_style, bowling_style, player_roles } = req.body;
 
     const player = await Player.findById(playerId);
     if (!player) {
       return res.status(404).json({ error: 'Player profile not found' });
+    }
+
+    // Update username with uniqueness check
+    if (username) {
+      const cleanUsername = username.trim().toLowerCase();
+      if (cleanUsername !== player.username) {
+        const existing = await Player.findOne({ username: cleanUsername });
+        if (existing) {
+          return res.status(409).json({ error: 'Username is already taken' });
+        }
+        player.username = cleanUsername;
+      }
     }
 
     // Update basic biographical details if supplied

@@ -1,429 +1,337 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-import { Shield, UserPlus, LogOut, Lock, CheckCircle, AlertTriangle, Eye, EyeOff, Search } from 'lucide-react';
+import { Shield, Calendar, MapPin, CheckCircle, AlertCircle, Play, ChevronRight } from 'lucide-react';
 import Navigation from '../components/Navigation';
 
+const API = 'http://localhost:5000/api/v1';
+
 const Dashboard = () => {
-  const { user, role, logout, changePassword } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
 
-  // Player search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setSearchLoading(true);
-    const timer = setTimeout(() => {
-      axios.get(`http://localhost:5000/api/v1/players/search?q=${searchQuery}`)
-        .then(res => {
-          setSearchResults(res.data);
-          setSearchLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setSearchLoading(false);
-        });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // User creation state (Admin only)
-  const [phone, setPhone] = useState('');
-  const [pass, setPass] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [battingStyle, setBattingStyle] = useState('RIGHT_HAND');
-  const [adminError, setAdminError] = useState('');
-  const [adminSuccess, setAdminSuccess] = useState('');
-  const [adminLoading, setAdminLoading] = useState(false);
-
-  // Password change state (All users)
-  const [oldPass, setOldPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmNewPass, setConfirmNewPass] = useState('');
-  const [passError, setPassError] = useState('');
-  const [passSuccess, setPassSuccess] = useState('');
-  const [passLoading, setPassLoading] = useState(false);
-  const [showPassSection, setShowPassSection] = useState(false);
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    setAdminError('');
-    setAdminSuccess('');
-    setAdminLoading(true);
-
-    if (!phone || !pass) {
-      setAdminError('Phone number and Password are required');
-      setAdminLoading(false);
-      return;
-    }
-
+  const fetchMatches = async () => {
     try {
-      const response = await axios.post('http://localhost:5000/api/v1/admin/users/create', {
-        phone_number: phone.trim(),
-        password: pass,
-        first_name: firstName,
-        last_name: lastName,
-        display_name: displayName,
-        batting_style: battingStyle
+      setLoading(true);
+      setError('');
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/matches`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setAdminSuccess(response.data.message || 'User created successfully!');
-      // Reset form
-      setPhone('');
-      setPass('');
-      setFirstName('');
-      setLastName('');
-      setDisplayName('');
-      setBattingStyle('RIGHT_HAND');
+      setMatches(response.data);
     } catch (err) {
-      setAdminError(err.response?.data?.error || 'Failed to create user.');
+      console.error('Error fetching matches:', err);
+      setError('Failed to load matches list.');
     } finally {
-      setAdminLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setPassError('');
-    setPassSuccess('');
-    setPassLoading(true);
+  useEffect(() => {
+    fetchMatches();
+  }, []);
 
-    if (!oldPass || !newPass || !confirmNewPass) {
-      setPassError('All password fields are required');
-      setPassLoading(false);
-      return;
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'LIVE':
+        return (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            color: '#22c55e',
+            padding: '0.2rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            animation: 'pulseGlow 2s infinite'
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
+            Live
+          </span>
+        );
+      case 'PAUSED':
+      case 'RAIN_DELAY':
+        return (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            color: '#f59e0b',
+            padding: '0.2rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase'
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
+            {status.replace('_', ' ')}
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            backgroundColor: 'rgba(29, 79, 42, 0.1)',
+            color: 'var(--secondary-color)',
+            padding: '0.2rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase'
+          }}>
+            <CheckCircle size={10} />
+            Completed
+          </span>
+        );
+      case 'ABANDONED':
+        return (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+            color: '#dc2626',
+            padding: '0.2rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase'
+          }}>
+            <AlertCircle size={10} />
+            Abandoned
+          </span>
+        );
+      default:
+        return (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            backgroundColor: 'rgba(255, 255, 255, 0.06)',
+            color: 'var(--text-muted)',
+            padding: '0.2rem 0.6rem',
+            borderRadius: '20px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase'
+          }}>
+            Upcoming
+          </span>
+        );
     }
+  };
 
-    try {
-      await changePassword(oldPass, newPass, confirmNewPass);
-      setPassSuccess('Password updated successfully!');
-      setOldPass('');
-      setNewPass('');
-      setConfirmNewPass('');
-      setTimeout(() => setShowPassSection(false), 2000);
-    } catch (err) {
-      setPassError(err.message);
-    } finally {
-      setPassLoading(false);
+  const getMatchResultText = (match) => {
+    if (match.match_status !== 'COMPLETED') return '';
+    if (!match.winner_team_id) {
+      return match.result_type === 'TIE' ? 'Match Tied' : 'No Result / Draw';
     }
+    const winnerName = match.winner_team_id.team_name || 'Winner';
+    const margin = match.win_margin || 0;
+    const resType = match.result_type ? match.result_type.toLowerCase() : 'runs';
+    return `${winnerName} won by ${margin} ${resType}`;
+  };
+
+  const formatMatchOvers = (legal_balls) => {
+    const overs = Math.floor(legal_balls / 6);
+    const balls = legal_balls % 6;
+    return `${overs}.${balls}`;
   };
 
   return (
     <>
       <Navigation />
+      
+      {/* CSS Animation Keyframes for live pulse */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes pulseGlow {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+      `}} />
+
       <div style={{
-        maxWidth: '1000px',
+        maxWidth: '900px',
         margin: '2rem auto',
         padding: '0 1.5rem',
+        width: '100%',
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: '2rem',
-        width: '100%',
-        boxSizing: 'border-box'
+        gap: '2rem'
       }}>
-        {/* Main grids */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr',
-        gap: '2rem',
-        width: '100%'
-      }}>
-        {/* Profile Card & Password settings */}
-        <section className="glass" style={{ padding: '2rem', boxShadow: 'var(--shadow)' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1rem', color: 'var(--secondary-color)' }}>
-            My Account
-          </h3>
-          <p style={{ marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-            Logged in as <strong>{user?.phone_number}</strong> with privilege level <strong>{role}</strong>.
-          </p>
-
-          {!showPassSection ? (
-            <button 
-              onClick={() => setShowPassSection(true)}
-              className="btn"
-              style={{
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-color)',
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              <Lock size={16} />
-              Change Password
-            </button>
-          ) : (
-            <form onSubmit={handleChangePassword} style={{
-              maxWidth: '400px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-              padding: '1rem',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(0,0,0,0.01)'
-            }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: '700' }}>Change Account Password</h4>
-              
-              {passError && (
-                <div style={{ color: '#D9534F', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <AlertTriangle size={14} />
-                  <span>{passError}</span>
-                </div>
-              )}
-              {passSuccess && (
-                <div style={{ color: 'var(--secondary-color)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <CheckCircle size={14} />
-                  <span>{passSuccess}</span>
-                </div>
-              )}
-
-              <input 
-                type="password" 
-                placeholder="Current Password" 
-                value={oldPass} 
-                onChange={(e) => setOldPass(e.target.value)} 
-                style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
-              />
-              <input 
-                type="password" 
-                placeholder="New Password" 
-                value={newPass} 
-                onChange={(e) => setNewPass(e.target.value)} 
-                style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
-              />
-              <input 
-                type="password" 
-                placeholder="Confirm New Password" 
-                value={confirmNewPass} 
-                onChange={(e) => setConfirmNewPass(e.target.value)} 
-                style={{ width: '100%', fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
-              />
-              
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="submit" disabled={passLoading} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
-                  {passLoading ? 'Saving...' : 'Save'}
-                </button>
-                <button type="button" onClick={() => { setShowPassSection(false); setPassError(''); }} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', border: '1px solid var(--border-color)' }}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
-
-        {/* Search Players Card */}
-        <section className="glass" style={{ padding: '2rem', boxShadow: 'var(--shadow)' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1rem', color: 'var(--secondary-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Search size={22} style={{ color: 'var(--accent-color)' }} />
-            Search Players Directory
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-            Search player profiles to view their career averages, bowling economy, partnerships, and visual analytics form timelines.
-          </p>
-          
-          <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 1rem', backgroundColor: 'var(--card-bg)' }}>
-              <Search size={18} style={{ color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                placeholder="Type player display name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ border: 'none', background: 'none', outline: 'none', width: '100%', padding: '0.25rem 0', color: 'var(--text-color)' }}
-              />
+        {/* Matches Overview */}
+        <section style={{ marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Shield size={22} style={{ color: 'var(--accent-color)' }} />
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--text-color)', margin: 0 }}>
+                Tournament Match Fixtures
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', marginLeft: '0.5rem' }}>
+                ({matches.length} Total)
+              </span>
             </div>
-
-            {searchQuery && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                backgroundColor: 'var(--dominant-color)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                zIndex: 100,
-                maxHeight: '300px',
-                overflowY: 'auto',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                marginTop: '0.5rem'
-              }}>
-                {searchLoading ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Searching players...</div>
-                ) : searchResults.length === 0 ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No players found</div>
-                ) : (
-                  searchResults.map(p => (
-                    <div
-                      key={p._id}
-                      onClick={() => navigate(`/players/${p._id}`)}
-                      style={{
-                        padding: '1rem',
-                        borderBottom: '1px solid var(--border-color)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transition: 'background-color 0.2s ease',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(29,79,42,0.05)'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <div>
-                        <strong style={{ display: 'block', color: 'var(--text-color)' }}>{p.first_name} {p.last_name} ({p.display_name})</strong>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.batting_style?.replace('_', ' ')}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.3rem' }}>
-                        {p.player_roles?.slice(0, 2).map(r => (
-                          <span key={r} style={{ fontSize: '0.65rem', fontWeight: '700', padding: '0.2rem 0.4rem', backgroundColor: 'var(--border-color)', borderRadius: '4px' }}>
-                            {r.replace('_', ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+            {role === 'SUPER_ADMIN' && (
+              <Link to="/matches/new" className="btn btn-primary" style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}>
+                New Match
+              </Link>
             )}
           </div>
-        </section>
 
-        {/* Admin Dashboard: Create User Account */}
-        {role === 'SUPER_ADMIN' ? (
-          <section className="glass" style={{ padding: '2rem', boxShadow: 'var(--shadow)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <UserPlus size={24} style={{ color: 'var(--secondary-color)' }} />
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0, color: 'var(--secondary-color)' }}>
-                Create New User Account
-              </h3>
+          {error && (
+            <div style={{
+              padding: '1rem',
+              backgroundColor: 'rgba(217, 83, 79, 0.1)',
+              border: '1px solid rgba(217, 83, 79, 0.3)',
+              borderRadius: '8px',
+              color: '#D9534F',
+              fontSize: '0.85rem',
+              marginBottom: '1.5rem'
+            }}>{error}</div>
+          )}
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '3rem' }}>
+              <div className="spinner" style={{ margin: '0 auto 1rem' }} />
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading match details...</p>
             </div>
+          ) : matches.length === 0 ? (
+            <div className="glass" style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              No matches have been configured yet.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {matches.map((match) => {
+                const isLive = ['LIVE', 'PAUSED', 'RAIN_DELAY'].includes(match.match_status);
+                const isCompleted = match.match_status === 'COMPLETED';
+                
+                return (
+                  <div
+                    key={match._id}
+                    className="glass"
+                    onClick={() => navigate(`/matches/${match._id}/live`)}
+                    style={{
+                      padding: '1.5rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                      transition: 'transform 0.2s ease, border-color 0.2s ease',
+                      border: isLive ? '1.5px solid var(--accent-color)' : '1px solid var(--border-color)',
+                      boxShadow: isLive ? '0 0 15px rgba(198,165,103,0.15)' : 'var(--shadow)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = 'var(--accent-color)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = isLive ? 'var(--accent-color)' : 'var(--border-color)';
+                    }}
+                  >
+                    {/* Card Top: Date/Venue & Status */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Calendar size={12} />
+                          {new Date(match.match_date_time).toLocaleDateString('en-US', {
+                            weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <MapPin size={12} />
+                          {match.venue}
+                        </div>
+                      </div>
+                      {getStatusBadge(match.match_status)}
+                    </div>
 
-            {adminError && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.75rem 1rem',
-                backgroundColor: 'rgba(217, 83, 79, 0.1)',
-                border: '1px solid rgba(217, 83, 79, 0.3)',
-                borderRadius: '8px',
-                color: '#D9534F',
-                fontSize: '0.85rem',
-                marginBottom: '1rem'
-              }}>
-                <AlertTriangle size={16} />
-                <span>{adminError}</span>
-              </div>
-            )}
+                    {/* Card Middle: Teams and Score */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                      {/* Team 1 */}
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: '120px' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: '800' }}>
+                          {match.team_first_id?.team_name}
+                        </span>
+                        {match.innings1 && (match.innings1.total_legal_balls > 0 || match.innings1.score > 0) && (
+                          <span style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--secondary-color)', marginTop: '0.2rem' }}>
+                            {match.innings1.score}/{match.innings1.wickets}
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '600', marginLeft: '0.3rem' }}>
+                              ({formatMatchOvers(match.innings1.total_legal_balls)} ov)
+                            </span>
+                          </span>
+                        )}
+                      </div>
 
-            {adminSuccess && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.75rem 1rem',
-                backgroundColor: 'rgba(29, 79, 42, 0.1)',
-                border: '1px solid rgba(29, 79, 42, 0.3)',
-                borderRadius: '8px',
-                color: 'var(--secondary-color)',
-                fontSize: '0.85rem',
-                marginBottom: '1rem'
-              }}>
-                <CheckCircle size={16} />
-                <span>{adminSuccess}</span>
-              </div>
-            )}
+                      {/* VS separator or Live match icon */}
+                      <div style={{ 
+                        color: 'var(--accent-color)', 
+                        fontWeight: '800', 
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255,255,255,0.03)',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        {isLive ? <Play size={12} style={{ fill: 'currentColor' }} /> : 'VS'}
+                      </div>
 
-            <form onSubmit={handleCreateUser} className="profile-form-grid">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Phone Number *</label>
-                <input 
-                  type="text" 
-                  placeholder="+919876543210" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)} 
-                  required
-                />
-              </div>
+                      {/* Team 2 */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flex: 1, minWidth: '120px', textAlign: 'right' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: '800' }}>
+                          {match.team_second_id?.team_name}
+                        </span>
+                        {match.innings2 && (match.innings2.total_legal_balls > 0 || match.innings2.score > 0) && (
+                          <span style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--secondary-color)', marginTop: '0.2rem' }}>
+                            {match.innings2.score}/{match.innings2.wickets}
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '600', marginLeft: '0.3rem' }}>
+                              ({formatMatchOvers(match.innings2.total_legal_balls)} ov)
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Password *</label>
-                <input 
-                  type="password" 
-                  placeholder="Temporary Password" 
-                  value={pass} 
-                  onChange={(e) => setPass(e.target.value)} 
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>First Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Virat" 
-                  value={firstName} 
-                  onChange={(e) => setFirstName(e.target.value)} 
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Last Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Kohli" 
-                  value={lastName} 
-                  onChange={(e) => setLastName(e.target.value)} 
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Display Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. V. Kohli" 
-                  value={displayName} 
-                  onChange={(e) => setDisplayName(e.target.value)} 
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Batting Style</label>
-                <select value={battingStyle} onChange={(e) => setBattingStyle(e.target.value)}>
-                  <option value="RIGHT_HAND">Right Hand Batsman</option>
-                  <option value="LEFT_HAND">Left Hand Batsman</option>
-                </select>
-              </div>
-
-              <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
-                <button type="submit" disabled={adminLoading} className="btn btn-primary" style={{ padding: '0.85rem 2rem', fontWeight: '700' }}>
-                  {adminLoading ? 'Creating User...' : 'Create Account'}
-                </button>
-              </div>
-            </form>
-          </section>
-        ) : (
-          <section className="glass" style={{ padding: '2rem', boxShadow: 'var(--shadow)', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--secondary-color)' }}>
-              Welcome to BatNBall Portal
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-              Standard user dashboard. In upcoming modules, you will be able to create matches, join live rosters, and update scores here.
-            </p>
-          </section>
-        )}
+                    {/* Card Bottom: Result text if completed */}
+                    {isCompleted && (
+                      <div style={{ 
+                        borderTop: '1px dashed var(--border-color)', 
+                        paddingTop: '0.75rem', 
+                        fontSize: '0.85rem', 
+                        color: 'var(--secondary-color)', 
+                        fontWeight: '750',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>{getMatchResultText(match)}</span>
+                        <ChevronRight size={16} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
-    </div>
     </>
   );
 };

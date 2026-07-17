@@ -13,6 +13,7 @@ const ProfileEdit = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [battingStyle, setBattingStyle] = useState('RIGHT_HAND');
   const [bowlingStyle, setBowlingStyle] = useState('NONE');
   const [roles, setRoles] = useState([]);
@@ -41,6 +42,7 @@ const ProfileEdit = () => {
         setFirstName(player.first_name || '');
         setLastName(player.last_name || '');
         setDisplayName(player.display_name || '');
+        setUsername(player.username || '');
         setBattingStyle(player.batting_style || 'RIGHT_HAND');
         setBowlingStyle(player.bowling_style || 'NONE');
         setRoles(player.player_roles || []);
@@ -97,8 +99,8 @@ const ProfileEdit = () => {
     setSuccess('');
     setSaveLoading(true);
 
-    if (!firstName || !lastName || !displayName) {
-      setError('First name, Last name, and Display name are required');
+    if (!firstName || !lastName || !displayName || !username) {
+      setError('First name, Last name, Display name, and Username are required');
       setSaveLoading(false);
       return;
     }
@@ -107,6 +109,7 @@ const ProfileEdit = () => {
     formData.append('first_name', firstName);
     formData.append('last_name', lastName);
     formData.append('display_name', displayName);
+    formData.append('username', username.trim().toLowerCase());
     formData.append('batting_style', battingStyle);
     formData.append('bowling_style', bowlingStyle);
     formData.append('player_roles', roles.join(','));
@@ -280,6 +283,16 @@ const ProfileEdit = () => {
                   type="text" 
                   value={displayName} 
                   onChange={(e) => setDisplayName(e.target.value)} 
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Username (Unique) *</label>
+                <input 
+                  type="text" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
                   required
                 />
               </div>

@@ -4,10 +4,16 @@ const Player = require('../models/Player');
 
 const createUser = async (req, res) => {
   try {
-    const { phone_number, password, first_name, last_name, display_name, batting_style } = req.body;
+    const { phone_number, password, username, first_name, last_name, display_name, batting_style } = req.body;
 
-    if (!phone_number || !password) {
-      return res.status(400).json({ error: 'Phone number and password are required' });
+    if (!phone_number || !password || !username) {
+      return res.status(400).json({ error: 'Phone number, password, and username are required' });
+    }
+
+    // Check if username is already taken
+    const existingPlayer = await Player.findOne({ username: username.trim().toLowerCase() });
+    if (existingPlayer) {
+      return res.status(409).json({ error: 'Username is already taken' });
     }
 
     // Check if user already exists
@@ -22,6 +28,7 @@ const createUser = async (req, res) => {
       first_name: first_name || 'New',
       last_name: last_name || 'Player',
       display_name: display_name || `Player-${phone_number.slice(-4)}`,
+      username: username.trim().toLowerCase(),
       batting_style: batting_style || 'RIGHT_HAND',
       bowling_style: 'NONE',
       player_roles: ['BATSMAN']
