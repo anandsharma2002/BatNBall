@@ -1,0 +1,116 @@
+# ============================================================
+# Node.js / npm
+# ============================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm
+.yarn-integrity
+.pnp
+.pnp.js
+
+# ============================================================
+# Build / Compiled output
+# ============================================================
+dist/
+dist-ssr/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# ============================================================
+# Environment & Secrets  ← NEVER commit these
+# ============================================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+
+# ============================================================
+# Uploaded / generated files
+# ============================================================
+BatNBall/Backend/uploads/
+
+# ============================================================
+# Logs & runtime data
+# ============================================================
+logs/
+*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================================
+# OS-generated junk
+# ============================================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+# ============================================================
+# Editor & IDE files
+# ============================================================
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# JetBrains (IntelliJ, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# ============================================================
+# Testing & Coverage
+# ============================================================
+coverage/
+.nyc_output/
+*.lcov
+
+# ============================================================
+# Misc tooling
+# ============================================================
+.eslintcache
+.stylelintcache
+*.local
+.turbo/
