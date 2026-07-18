@@ -14,6 +14,7 @@ import Leaderboard from './pages/Leaderboard';
 import PlayerProfile from './pages/PlayerProfile';
 import Settings from './pages/Settings';
 import CreateUser from './pages/CreateUser';
+import MyMatches from './pages/MyMatches';
 
 import ThemeToggle from './components/ThemeToggle';
 
@@ -39,6 +40,7 @@ function App() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/create-user" element={<CreateUser />} />
+            <Route path="/my-matches" element={<MyMatches />} />
           </Route>
 
           {/* Root Redirect to Dashboard */}

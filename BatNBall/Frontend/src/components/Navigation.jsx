@@ -150,6 +150,25 @@ const Navigation = () => {
                   </Link>
 
                   <Link
+                    to="/my-matches"
+                    onClick={() => setDropdownOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.6rem 1rem',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-color)',
+                      fontWeight: '600'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(29, 79, 42, 0.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Trophy size={14} />
+                    My Matches
+                  </Link>
+
+                  <Link
                     to="/settings"
                     onClick={() => setDropdownOpen(false)}
                     style={{

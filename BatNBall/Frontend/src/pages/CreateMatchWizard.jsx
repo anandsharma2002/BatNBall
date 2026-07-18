@@ -12,6 +12,15 @@ const getLocalDateTimeString = () => {
   return localNow.toISOString().slice(0, 16);
 };
 
+// Helper to auto-generate team short name
+const generateShortName = (name) => {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) {
+    return words.map(w => w[0]).join('').substring(0, 5).toUpperCase();
+  }
+  return name.substring(0, 3).toUpperCase();
+};
+
 const CreateMatchWizard = () => {
   const navigate = useNavigate();
 
@@ -45,6 +54,29 @@ const CreateMatchWizard = () => {
   const [teamFirstId, setTeamFirstId] = useState(savedConfig?.teamFirstId || '');
   const [teamSecondId, setTeamSecondId] = useState(savedConfig?.teamSecondId || '');
   const [matchData, setMatchData] = useState(null);
+
+  // Autocomplete states for Team A and Team B
+  const [teamFirstSearch, setTeamFirstSearch] = useState('');
+  const [teamFirstSelectedId, setTeamFirstSelectedId] = useState(savedConfig?.teamFirstId || null);
+  const [showTeamFirstDropdown, setShowTeamFirstDropdown] = useState(false);
+
+  const [teamSecondSearch, setTeamSecondSearch] = useState('');
+  const [teamSecondSelectedId, setTeamSecondSelectedId] = useState(savedConfig?.teamSecondId || null);
+  const [showTeamSecondDropdown, setShowTeamSecondDropdown] = useState(false);
+
+  // Sync search inputs once teamsList loads
+  useEffect(() => {
+    if (teamsList.length > 0) {
+      if (teamFirstSelectedId) {
+        const team = teamsList.find(t => t._id === teamFirstSelectedId);
+        if (team) setTeamFirstSearch(team.team_name);
+      }
+      if (teamSecondSelectedId) {
+        const team = teamsList.find(t => t._id === teamSecondSelectedId);
+        if (team) setTeamSecondSearch(team.team_name);
+      }
+    }
+  }, [teamsList, teamFirstSelectedId, teamSecondSelectedId]);
 
   // Search & add players state
   const [searchQuery, setSearchQuery] = useState('');
@@ -132,19 +164,58 @@ const CreateMatchWizard = () => {
     e.preventDefault();
     setError('');
 
-    if (!venue || !dateTime || !teamFirstId || !teamSecondId) {
+    const trimmedFirst = teamFirstSearch.trim();
+    const trimmedSecond = teamSecondSearch.trim();
+
+    if (!venue || !dateTime || !trimmedFirst || !trimmedSecond) {
       setError('Please fill in all configuration and team fields');
       return;
     }
 
-    if (teamFirstId === teamSecondId) {
-      setError('Please select two different teams');
+    if (trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()) {
+      setError('Please enter two different team names');
       return;
     }
 
     setLoading(true);
 
     try {
+      // 1. Resolve Team A
+      let firstId = teamFirstSelectedId;
+      if (!firstId) {
+        const matched = teamsList.find(t => t.team_name.toLowerCase() === trimmedFirst.toLowerCase());
+        if (matched) {
+          firstId = matched._id;
+        } else {
+          const shortName = generateShortName(trimmedFirst);
+          const teamRes = await axios.post('http://localhost:5000/api/v1/teams', {
+            team_name: trimmedFirst,
+            team_short_name: shortName
+          });
+          firstId = teamRes.data.team._id;
+        }
+      }
+
+      // 2. Resolve Team B
+      let secondId = teamSecondSelectedId;
+      if (!secondId) {
+        const matched = teamsList.find(t => t.team_name.toLowerCase() === trimmedSecond.toLowerCase());
+        if (matched) {
+          secondId = matched._id;
+        } else {
+          const shortName = generateShortName(trimmedSecond);
+          const teamRes = await axios.post('http://localhost:5000/api/v1/teams', {
+            team_name: trimmedSecond,
+            team_short_name: shortName
+          });
+          secondId = teamRes.data.team._id;
+        }
+      }
+
+      // Sync local state IDs
+      setTeamFirstId(firstId);
+      setTeamSecondId(secondId);
+
       // Save configuration to localStorage
       localStorage.setItem('last_match_config', JSON.stringify({
         venue,
@@ -152,8 +223,8 @@ const CreateMatchWizard = () => {
         maxOversPerBowler,
         ballType,
         rules,
-        teamFirstId,
-        teamSecondId
+        teamFirstId: firstId,
+        teamSecondId: secondId
       }));
 
       const res = await axios.post('http://localhost:5000/api/v1/matches', {
@@ -162,8 +233,8 @@ const CreateMatchWizard = () => {
         total_overs_per_innings: totalOvers,
         max_overs_per_bowler: maxOversPerBowler,
         ball_type: ballType,
-        team_first_id: teamFirstId,
-        team_second_id: teamSecondId,
+        team_first_id: firstId,
+        team_second_id: secondId,
         match_rules: rules,
         umpires: []
       });
@@ -260,6 +331,13 @@ const CreateMatchWizard = () => {
       setLoading(false);
     }
   };
+
+  const filteredTeamA = teamsList.filter(t => 
+    t.team_name.toLowerCase().includes(teamFirstSearch.toLowerCase())
+  );
+  const filteredTeamB = teamsList.filter(t => 
+    t.team_name.toLowerCase().includes(teamSecondSearch.toLowerCase())
+  );
 
   return (
     <>
@@ -360,20 +438,120 @@ const CreateMatchWizard = () => {
 
               {/* Team selection */}
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }} className="profile-form-grid">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', position: 'relative' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Team A *</label>
-                  <select value={teamFirstId} onChange={(e) => setTeamFirstId(e.target.value)} required>
-                    <option value="">Select Team A</option>
-                    {teamsList.map(t => <option key={t._id} value={t._id}>{t.team_name}</option>)}
-                  </select>
+                  <input
+                    type="text"
+                    placeholder="Search or type new Team A"
+                    value={teamFirstSearch}
+                    onChange={(e) => {
+                      setTeamFirstSearch(e.target.value);
+                      const matched = teamsList.find(t => t.team_name.toLowerCase() === e.target.value.toLowerCase().trim());
+                      setTeamFirstSelectedId(matched ? matched._id : null);
+                      setShowTeamFirstDropdown(true);
+                    }}
+                    onFocus={() => setShowTeamFirstDropdown(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowTeamFirstDropdown(false), 200);
+                    }}
+                    required
+                  />
+                  {showTeamFirstDropdown && filteredTeamA.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 10,
+                      background: 'var(--dominant-color)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      boxShadow: 'var(--shadow)',
+                      maxHeight: '180px',
+                      overflowY: 'auto',
+                      marginTop: '0.2rem'
+                    }}>
+                      {filteredTeamA.map(t => (
+                        <div
+                          key={t._id}
+                          onMouseDown={() => {
+                            setTeamFirstSearch(t.team_name);
+                            setTeamFirstSelectedId(t._id);
+                            setShowTeamFirstDropdown(false);
+                          }}
+                          style={{
+                            padding: '0.6rem 1rem',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.02)',
+                            transition: 'background-color 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          {t.team_name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', position: 'relative' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Team B *</label>
-                  <select value={teamSecondId} onChange={(e) => setTeamSecondId(e.target.value)} required>
-                    <option value="">Select Team B</option>
-                    {teamsList.map(t => <option key={t._id} value={t._id}>{t.team_name}</option>)}
-                  </select>
+                  <input
+                    type="text"
+                    placeholder="Search or type new Team B"
+                    value={teamSecondSearch}
+                    onChange={(e) => {
+                      setTeamSecondSearch(e.target.value);
+                      const matched = teamsList.find(t => t.team_name.toLowerCase() === e.target.value.toLowerCase().trim());
+                      setTeamSecondSelectedId(matched ? matched._id : null);
+                      setShowTeamSecondDropdown(true);
+                    }}
+                    onFocus={() => setShowTeamSecondDropdown(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowTeamSecondDropdown(false), 200);
+                    }}
+                    required
+                  />
+                  {showTeamSecondDropdown && filteredTeamB.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 10,
+                      background: 'var(--dominant-color)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      boxShadow: 'var(--shadow)',
+                      maxHeight: '180px',
+                      overflowY: 'auto',
+                      marginTop: '0.2rem'
+                    }}>
+                      {filteredTeamB.map(t => (
+                        <div
+                          key={t._id}
+                          onMouseDown={() => {
+                            setTeamSecondSearch(t.team_name);
+                            setTeamSecondSelectedId(t._id);
+                            setShowTeamSecondDropdown(false);
+                          }}
+                          style={{
+                            padding: '0.6rem 1rem',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            borderBottom: '1px solid rgba(255,255,255,0.02)',
+                            transition: 'background-color 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          {t.team_name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

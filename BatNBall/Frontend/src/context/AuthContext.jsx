@@ -3,17 +3,29 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
+// Synchronously initialize default Authorization header if token exists in localStorage
+const initialToken = localStorage.getItem('token');
+if (initialToken && initialToken !== 'null' && initialToken !== 'undefined') {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+}
+
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  const [token, setToken] = useState(() => {
+    const saved = localStorage.getItem('token');
+    return (saved && saved !== 'null' && saved !== 'undefined') ? saved : null;
+  });
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('user');
     try {
-      return saved ? JSON.parse(saved) : null;
+      return (saved && saved !== 'null' && saved !== 'undefined') ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
   });
-  const [role, setRole] = useState(() => localStorage.getItem('role') || null);
+  const [role, setRole] = useState(() => {
+    const saved = localStorage.getItem('role');
+    return (saved && saved !== 'null' && saved !== 'undefined') ? saved : null;
+  });
 
   // Set default auth headers whenever token changes
   useEffect(() => {
@@ -25,6 +37,30 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
     }
   }, [token]);
+
+  // Global interceptor for 401 Unauthorized errors
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response && error.response.status === 401) {
+          // Clear authentication states and localStorage
+          setToken(null);
+          setUser(null);
+          setRole(null);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('role');
+          delete axios.defaults.headers.common['Authorization'];
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
 
   const login = async (phone_number, password) => {
     try {

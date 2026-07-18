@@ -179,10 +179,10 @@ const VisitorDashboard = () => {
 
     // Initialize playing squads to list those who did not bat/bowl
     battingTeamPlayers?.forEach(p => {
-      batsmanStats[p._id] = { name: p.display_name, runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'did not bat', isBatted: false };
+      batsmanStats[p._id] = { id: p._id.toString(), name: p.display_name, runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'did not bat', isBatted: false };
     });
     bowlingTeamPlayers?.forEach(p => {
-      bowlerStats[p._id] = { name: p.display_name, legalBalls: 0, runs: 0, wickets: 0, oversConceded: {}, oversBalls: {} };
+      bowlerStats[p._id] = { id: p._id.toString(), name: p.display_name, legalBalls: 0, runs: 0, wickets: 0, oversConceded: {}, oversBalls: {} };
     });
 
     // Process ball by ball
@@ -194,7 +194,7 @@ const VisitorDashboard = () => {
       // Handle Batsman Stats
       if (strikerId) {
         if (!batsmanStats[strikerId]) {
-          batsmanStats[strikerId] = { name: 'Unknown Batsman', runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'not out', isBatted: true };
+          batsmanStats[strikerId] = { id: strikerId.toString(), name: 'Unknown Batsman', runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'not out', isBatted: true };
         }
         batsmanStats[strikerId].isBatted = true;
         if (batsmanStats[strikerId].dismissalText === 'did not bat') {
@@ -216,7 +216,7 @@ const VisitorDashboard = () => {
 
       if (nonStrikerId) {
         if (!batsmanStats[nonStrikerId]) {
-          batsmanStats[nonStrikerId] = { name: 'Unknown Batsman', runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'not out', isBatted: true };
+          batsmanStats[nonStrikerId] = { id: nonStrikerId.toString(), name: 'Unknown Batsman', runs: 0, balls: 0, fours: 0, sixes: 0, dismissalText: 'not out', isBatted: true };
         }
         if (batsmanStats[nonStrikerId].dismissalText === 'did not bat') {
           batsmanStats[nonStrikerId].dismissalText = 'not out';
@@ -251,7 +251,7 @@ const VisitorDashboard = () => {
       // Handle Bowler Stats
       if (bowlerId) {
         if (!bowlerStats[bowlerId]) {
-          bowlerStats[bowlerId] = { name: 'Unknown Bowler', legalBalls: 0, runs: 0, wickets: 0, oversConceded: {}, oversBalls: {} };
+          bowlerStats[bowlerId] = { id: bowlerId.toString(), name: 'Unknown Bowler', legalBalls: 0, runs: 0, wickets: 0, oversConceded: {}, oversBalls: {} };
         }
 
         // Conceded runs calculation
@@ -307,9 +307,47 @@ const VisitorDashboard = () => {
     });
     const totalExtras = wides + noBalls + byes + legByes + penalty;
 
+    // Sort batsmen according to crease entrance order
+    const entranceOrder = [];
+    inningsBalls.forEach(ball => {
+      const strikerId = ball.striker_id?._id || ball.striker_id;
+      const nonStrikerId = ball.non_striker_id?._id || ball.non_striker_id;
+      
+      if (strikerId && !entranceOrder.includes(strikerId.toString())) {
+        entranceOrder.push(strikerId.toString());
+      }
+      if (nonStrikerId && !entranceOrder.includes(nonStrikerId.toString())) {
+        entranceOrder.push(nonStrikerId.toString());
+      }
+    });
+
+    if (match && match.current_innings === inningsNum && match.crease_state) {
+      const strikerId = match.crease_state.striker_id?._id || match.crease_state.striker_id;
+      const nonStrikerId = match.crease_state.non_striker_id?._id || match.crease_state.non_striker_id;
+      if (strikerId && !entranceOrder.includes(strikerId.toString())) {
+        entranceOrder.push(strikerId.toString());
+      }
+      if (nonStrikerId && !entranceOrder.includes(nonStrikerId.toString())) {
+        entranceOrder.push(nonStrikerId.toString());
+      }
+    }
+
+    const sortedBatsmen = [];
+    entranceOrder.forEach(pId => {
+      const stats = batsmanStats[pId];
+      if (stats) sortedBatsmen.push(stats);
+    });
+
+    Object.keys(batsmanStats).forEach(pId => {
+      if (!entranceOrder.includes(pId)) {
+        sortedBatsmen.push(batsmanStats[pId]);
+      }
+    });
+
     return {
-      batsmen: Object.values(batsmanStats),
+      batsmen: sortedBatsmen,
       bowlers: Object.values(bowlerStats).filter(b => b.legalBalls > 0 || b.runs > 0),
+      bowlerStatsMap: bowlerStats,
       extras: { total: totalExtras, wides, noBalls, byes, legByes, penalty }
     };
   };
@@ -435,10 +473,85 @@ const VisitorDashboard = () => {
                   const winnerName = match.winner_team_id.team_name || 'Winner';
                   const margin = match.win_margin || 0;
                   const resType = match.result_type ? match.result_type.toLowerCase() : 'runs';
-                  return `Result: ${winnerName} won by ${margin} ${resType}`;
+                  return `${winnerName} won by ${margin} ${resType}`;
                 })()}
               </p>
             )}
+
+            {/* Live crease stats block */}
+            {['LIVE', 'PAUSED', 'RAIN_DELAY'].includes(match?.match_status) && (() => {
+              const currentInnings = match?.current_innings || 1;
+              const scorecard = compileScorecard(currentInnings);
+
+              const strikerId = (match?.crease_state?.striker_id?._id || match?.crease_state?.striker_id)?.toString();
+              const nonStrikerId = (match?.crease_state?.non_striker_id?._id || match?.crease_state?.non_striker_id)?.toString();
+              const bowlerId = (match?.crease_state?.bowler_id?._id || match?.crease_state?.bowler_id)?.toString();
+
+              // Get both crease batsmen in FIXED entrance order (filter preserves array order)
+              const creaseBatsmen = scorecard.batsmen.filter(b =>
+                b.id === strikerId || b.id === nonStrikerId
+              );
+
+              const bowler = scorecard.bowlerStatsMap && bowlerId
+                ? scorecard.bowlerStatsMap[bowlerId]
+                : null;
+
+              const formatOvers = (legalBalls) => {
+                const ov = Math.floor(legalBalls / 6);
+                const bl = legalBalls % 6;
+                return `${ov}.${bl}`;
+              };
+
+              return (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginTop: '1rem',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid rgba(0,0,0,0.07)',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-color)',
+                  lineHeight: '1.6',
+                  gap: '1rem'
+                }}>
+                  {/* Batsmen — fixed order, only * moves */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', flex: 1 }}>
+                    {creaseBatsmen.length > 0 ? creaseBatsmen.map(b => {
+                      const isOnStrike = b.id === strikerId;
+                      return (
+                        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <span style={{ fontWeight: isOnStrike ? '800' : '500', color: isOnStrike ? 'var(--text-color)' : 'var(--text-muted)' }}>
+                            {b.name}{isOnStrike ? '*' : '\u00a0'}
+                          </span>
+                          <span style={{ color: isOnStrike ? 'var(--secondary-color)' : 'var(--text-muted)', fontSize: '0.82rem' }}>
+                            {b.runs} ({b.balls})
+                          </span>
+                        </div>
+                      );
+                    }) : (
+                      <div style={{ color: 'var(--text-muted)' }}>No batsmen at crease</div>
+                    )}
+                  </div>
+
+                  {/* Bowler — far right */}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {bowler ? (
+                      <>
+                        <div style={{ fontWeight: '700', color: 'var(--text-color)' }}>
+                          {bowler.name}
+                        </div>
+                        <div style={{ color: 'var(--accent-color)', fontSize: '0.82rem' }}>
+                          {bowler.wickets}/{bowler.runs} ({formatOvers(bowler.legalBalls)})
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ color: 'var(--text-muted)' }}>–</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -492,7 +605,7 @@ const VisitorDashboard = () => {
         }}>
           {[
             { id: 'live', name: 'Live Tracking' },
-            { id: 'scorecard', name: 'Full Scorecard' },
+            { id: 'scorecard', name: 'Full Scoreboard' },
             { id: 'squads', name: 'Playing Squads' }
           ].map(tab => (
             <button
@@ -665,12 +778,16 @@ const VisitorDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {scorecardData.batsmen.length === 0 ? (
-                        <tr>
-                          <td colSpan="7" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No batting stats available</td>
-                        </tr>
-                      ) : (
-                        scorecardData.batsmen.map((b, idx) => (
+                      {(() => {
+                        const activeBatsmen = scorecardData.batsmen.filter(b => b.isBatted);
+                        if (activeBatsmen.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="7" style={{ padding: '1rem 0.25rem', textAlign: 'center', color: 'var(--text-muted)' }}>No batting stats available</td>
+                            </tr>
+                          );
+                        }
+                        return activeBatsmen.map((b, idx) => (
                           <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                             <td style={{ padding: '0.6rem 0.25rem', fontWeight: '600' }}>{b.name}</td>
                             <td style={{ padding: '0.6rem 0.25rem', color: 'var(--text-muted)' }}>{b.dismissalText}</td>
@@ -680,8 +797,8 @@ const VisitorDashboard = () => {
                             <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right' }}>{b.sixes}</td>
                             <td style={{ padding: '0.6rem 0.25rem', textAlign: 'right', color: 'var(--text-muted)' }}>{calcStrikeRate(b.runs, b.balls)}</td>
                           </tr>
-                        ))
-                      )}
+                        ));
+                      })()}
                       {/* Extras Row */}
                       <tr style={{ borderBottom: '1px solid var(--border-color)', fontWeight: '600' }}>
                         <td style={{ padding: '0.6rem 0.25rem' }}>Extras</td>
@@ -694,6 +811,24 @@ const VisitorDashboard = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Did not bat section */}
+                {(() => {
+                  const didNotBat = scorecardData.batsmen.filter(b => !b.isBatted);
+                  if (didNotBat.length === 0) return null;
+                  return (
+                    <div style={{
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                      marginBottom: '1.5rem',
+                      padding: '0.2rem 0.25rem',
+                      lineHeight: '1.4'
+                    }}>
+                      <span style={{ fontWeight: '700', color: 'var(--text-color)' }}>Did not bat: </span>
+                      {didNotBat.map(b => b.name).join(', ')}
+                    </div>
+                  );
+                })()}
 
                 {/* Bowling Card Table */}
                 <h3 style={{ fontSize: '0.9rem', fontWeight: '800', marginBottom: '0.75rem', color: 'var(--secondary-color)', textTransform: 'uppercase' }}>Bowling</h3>

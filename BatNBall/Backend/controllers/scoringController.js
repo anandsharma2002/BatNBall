@@ -3,6 +3,24 @@ const BallByBall = require('../models/BallByBall');
 const Partnership = require('../models/Partnership');
 const { updateCareerStatsForMatch } = require('../services/statsService');
 
+const getPopulatedMatch = async (matchId) => {
+  return await Match.findById(matchId)
+    .populate('crease_state.striker_id', 'display_name first_name last_name')
+    .populate('crease_state.non_striker_id', 'display_name first_name last_name')
+    .populate('crease_state.bowler_id', 'display_name first_name last_name')
+    .populate('current_innings_batting_team_id', 'team_name team_short_name')
+    .populate('current_innings_bowling_team_id', 'team_name team_short_name')
+    .populate('playing_xi_team_first', 'display_name first_name last_name')
+    .populate('playing_xi_team_second', 'display_name first_name last_name')
+    .populate('substitutes_team_first', 'display_name first_name last_name')
+    .populate('substitutes_team_second', 'display_name first_name last_name')
+    .populate('team_first_id', 'team_name team_short_name')
+    .populate('team_second_id', 'team_name team_short_name')
+    .populate('winner_team_id', 'team_name team_short_name')
+    .populate('umpires', 'display_name first_name last_name')
+    .populate('scorers', 'phone_number');
+};
+
 // ─── Helper: Determine Match Phase ────────────────────────────────────────────
 const getMatchPhase = (overNumber, totalOvers) => {
   const powerplayEnd = Math.min(6, totalOvers);
@@ -88,6 +106,29 @@ const emitScoreUpdate = async (req, matchId, populatedMatch) => {
   }
 };
 
+const autoCalculateMatchResult = (match) => {
+  const score1 = match.innings1?.score || 0;
+  const score2 = match.innings2?.score || 0;
+  const wickets2 = match.innings2?.wickets || 0;
+  
+  const team2ndBatting = match.current_innings_batting_team_id;
+  const team1stBatting = match.current_innings_bowling_team_id;
+  
+  if (score2 > score1) {
+    match.winner_team_id = team2ndBatting;
+    match.result_type = 'WICKETS';
+    match.win_margin = 10 - wickets2;
+  } else if (score1 > score2) {
+    match.winner_team_id = team1stBatting;
+    match.result_type = 'RUNS';
+    match.win_margin = score1 - score2;
+  } else {
+    match.winner_team_id = null;
+    match.result_type = 'TIE';
+    match.win_margin = 0;
+  }
+};
+
 const verifyScoringPermission = (match, req) => {
   if (req.user.role === 'SUPER_ADMIN') return true;
   const userId = req.user.userId;
@@ -145,16 +186,7 @@ const initializeCrease = async (req, res) => {
 
     await match.save();
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     // Emit WebSocket updates
     const io = req.app.get('io');
@@ -404,6 +436,7 @@ const logBall = async (req, res) => {
       } else {
         // Match complete
         match.match_status = 'COMPLETED';
+        autoCalculateMatchResult(match);
         newStriker = null;
         match.crease_state = { striker_id: null, non_striker_id: null, bowler_id: null, legal_balls_this_over: 0 };
       }
@@ -414,6 +447,7 @@ const logBall = async (req, res) => {
       currentInnings.is_complete = true;
       match[inningsKey] = currentInnings;
       match.match_status = 'COMPLETED';
+      autoCalculateMatchResult(match);
       newStriker = null;
       match.crease_state = { striker_id: null, non_striker_id: null, bowler_id: null, legal_balls_this_over: 0 };
     }
@@ -437,16 +471,7 @@ const logBall = async (req, res) => {
       await updateCareerStatsForMatch(matchId);
     }
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     // ── Emit Socket Updates ────────────────────────────────────────────────
     const io = req.app.get('io');
@@ -494,16 +519,7 @@ const setNextBatter = async (req, res) => {
     match.undo_actions_remaining = 0; // reset undo on new batter entry
     await match.save();
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     const io = req.app.get('io');
     if (io) {
@@ -538,16 +554,7 @@ const setNextBowler = async (req, res) => {
     match.undo_actions_remaining = 0; // reset undo on new bowler/over start
     await match.save();
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     const io = req.app.get('io');
     if (io) {
@@ -568,16 +575,7 @@ const getScorecard = async (req, res) => {
   try {
     const { matchId } = req.params;
 
-    const match = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name first_name last_name')
-      .populate('crease_state.non_striker_id', 'display_name first_name last_name')
-      .populate('crease_state.bowler_id', 'display_name first_name last_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('team_first_id', 'team_name team_short_name')
-      .populate('team_second_id', 'team_name team_short_name');
+    const match = await getPopulatedMatch(matchId);
 
     if (!match) return res.status(404).json({ error: 'Match not found' });
 
@@ -703,16 +701,7 @@ const undoLastBall = async (req, res) => {
 
     await recalculatePartnerships(matchId);
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     const io = req.app.get('io');
     if (io) {
@@ -813,16 +802,7 @@ const substitutePlayer = async (req, res) => {
 
     await match.save();
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     const io = req.app.get('io');
     if (io) {
@@ -877,16 +857,7 @@ const endMatch = async (req, res) => {
     // Trigger stats calculation
     await updateCareerStatsForMatch(matchId);
 
-    const populated = await Match.findById(matchId)
-      .populate('crease_state.striker_id', 'display_name')
-      .populate('crease_state.non_striker_id', 'display_name')
-      .populate('crease_state.bowler_id', 'display_name')
-      .populate('current_innings_batting_team_id', 'team_name team_short_name')
-      .populate('current_innings_bowling_team_id', 'team_name team_short_name')
-      .populate('playing_xi_team_first', 'display_name first_name last_name')
-      .populate('playing_xi_team_second', 'display_name first_name last_name')
-      .populate('substitutes_team_first', 'display_name first_name last_name')
-      .populate('substitutes_team_second', 'display_name first_name last_name');
+    const populated = await getPopulatedMatch(matchId);
 
     // Emit live update
     const io = req.app.get('io');

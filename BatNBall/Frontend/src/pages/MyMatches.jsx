@@ -7,8 +7,8 @@ import Navigation from '../components/Navigation';
 
 const API = 'http://localhost:5000/api/v1';
 
-const Dashboard = () => {
-  const { user, role } = useAuth();
+const MyMatches = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [matches, setMatches] = useState([]);
@@ -23,7 +23,25 @@ const Dashboard = () => {
       const response = await axios.get(`${API}/matches`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMatches(response.data);
+      
+      // Filter matches to only those where the current user's associated player ID is present in the roster lists
+      const myPlayerId = user?.associated_player_id;
+      if (myPlayerId) {
+        const filtered = response.data.filter(match => {
+          const firstXI = match.playing_xi_team_first || [];
+          const secondXI = match.playing_xi_team_second || [];
+          const firstSubs = match.substitutes_team_first || [];
+          const secondSubs = match.substitutes_team_second || [];
+          
+          return firstXI.includes(myPlayerId) || 
+                 secondXI.includes(myPlayerId) || 
+                 firstSubs.includes(myPlayerId) || 
+                 secondSubs.includes(myPlayerId);
+        });
+        setMatches(filtered);
+      } else {
+        setMatches([]);
+      }
     } catch (err) {
       console.error('Error fetching matches:', err);
       setError('Failed to load matches list.');
@@ -34,7 +52,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchMatches();
-  }, []);
+  }, [user]);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -172,23 +190,18 @@ const Dashboard = () => {
         flexDirection: 'column',
         gap: '2rem'
       }}>
-        {/* Matches Overview */}
+        {/* My Matches Overview */}
         <section style={{ marginTop: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Shield size={22} style={{ color: 'var(--accent-color)' }} />
               <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--text-color)', margin: 0 }}>
-                Tournament Match Fixtures
+                My Matches
               </h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', marginLeft: '0.5rem' }}>
-                ({matches.length} Total)
+                ({matches.length} Played)
               </span>
             </div>
-            {role === 'SUPER_ADMIN' && (
-              <Link to="/matches/new" className="btn btn-primary" style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}>
-                New Match
-              </Link>
-            )}
           </div>
 
           {error && (
@@ -203,14 +216,18 @@ const Dashboard = () => {
             }}>{error}</div>
           )}
 
-          {loading ? (
+          {!user?.associated_player_id ? (
+            <div className="glass" style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              No player profile is currently linked to your user account.
+            </div>
+          ) : loading ? (
             <div style={{ textAlign: 'center', padding: '3rem' }}>
               <div className="spinner" style={{ margin: '0 auto 1rem' }} />
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading match details...</p>
             </div>
           ) : matches.length === 0 ? (
             <div className="glass" style={{ padding: '3rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              No matches have been configured yet.
+              You have not played in any matches yet.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -276,7 +293,7 @@ const Dashboard = () => {
                         )}
                       </div>
 
-                      {/* VS separator or Live match icon */}
+                      {/* VS separator */}
                       <div style={{ 
                         color: 'var(--accent-color)', 
                         fontWeight: '800', 
@@ -336,4 +353,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default MyMatches;

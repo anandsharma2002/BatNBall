@@ -110,9 +110,9 @@ const ScoringBoard = () => {
   const [showEndMatchModal, setShowEndMatchModal] = useState(false);
   const [endMatchForm, setEndMatchForm] = useState({ winner_team_id: 'DRAW', result_type: 'RUNS', win_margin: 0 });
 
-  const showToast = (msg) => {
+  const showToast = (msg, duration = 3000) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    setTimeout(() => setToast(''), duration);
   };
 
   // ─── Load scorecard ──────────────────────────────────────────────────────────
@@ -138,15 +138,36 @@ const ScoringBoard = () => {
     socketRef.current.on('ball_logged', ({ ball, match: updatedMatch, over_completed, innings_transition, wicket }) => {
       setMatch(updatedMatch);
       setBalls(prev => [...prev, ball]);
-      if (over_completed && !innings_transition) {
-        setShowNextBowler(true);
-      }
-      if (innings_transition) {
-        setShowInitModal(true);
-        showToast('🏏 Innings 1 Complete! Set openers for Innings 2');
-      }
-      if (wicket) {
-        setShowNextBatter(true);
+      
+      if (updatedMatch.match_status === 'COMPLETED') {
+        setShowNextBowler(false);
+        setShowNextBatter(false);
+        
+        let winnerText = 'Match Tied';
+        if (updatedMatch.winner_team_id) {
+          const winnerName = (typeof updatedMatch.winner_team_id === 'object' ? updatedMatch.winner_team_id.team_name : '') || 'Winner';
+          const margin = updatedMatch.win_margin || 0;
+          const resType = updatedMatch.result_type ? updatedMatch.result_type.toLowerCase() : 'runs';
+          winnerText = `🏆 ${winnerName} won by ${margin} ${resType}`;
+        } else if (updatedMatch.result_type === 'TIE') {
+          winnerText = '🏆 Match Tied';
+        } else {
+          winnerText = '🏆 No Result / Draw';
+        }
+        showToast(winnerText, 3000);
+      } else {
+        if (over_completed && !innings_transition) {
+          setShowNextBowler(true);
+        }
+        if (innings_transition) {
+          showToast('🏏 Innings Complete!', 2000);
+          setTimeout(() => {
+            setShowInitModal(true);
+          }, 2000);
+        }
+        if (wicket) {
+          setShowNextBatter(true);
+        }
       }
       // Animate strike swap
       setStrikeSwapped(true);
@@ -377,12 +398,14 @@ const ScoringBoard = () => {
       {/* Toast */}
       {toast && (
         <div style={{
-          position: 'fixed', top: '80px', right: '1.5rem', zIndex: 200,
+          position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 200,
           background: 'var(--secondary-color)', color: '#fff',
-          padding: '0.75rem 1.25rem', borderRadius: '8px',
-          fontWeight: '600', fontSize: '0.9rem',
+          padding: '0.75rem 1.5rem', borderRadius: '8px',
+          fontWeight: '700', fontSize: '0.95rem',
           boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          animation: 'fadeIn 0.2s ease'
+          animation: 'fadeIn 0.2s ease',
+          textAlign: 'center',
+          whiteSpace: 'nowrap'
         }}>
           {toast}
         </div>
@@ -864,12 +887,36 @@ const ScoringBoard = () => {
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Select the next batter</p>
           <select className="form-input" value={nextBatterId} onChange={e => setNextBatterId(e.target.value)} style={{ marginBottom: '1rem' }}>
             <option value="">— Select Batter —</option>
-            {(battingTeamPlaying || []).map(p => {
-              if (!p) return null;
-              const id = p._id || p;
-              const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
-              return <option key={id} value={id}>{name}</option>;
-            })}
+            {(() => {
+              const currentInnings = match?.current_innings || 1;
+              const dismissedPlayerIds = new Set();
+              (balls || [])
+                .filter(b => b.innings_number === currentInnings)
+                .forEach(b => {
+                  if (b.dismissal?.is_wicket && b.dismissal?.dismissed_player_id) {
+                    const dbId = b.dismissal.dismissed_player_id._id || b.dismissal.dismissed_player_id;
+                    dismissedPlayerIds.add(dbId.toString());
+                  }
+                });
+
+              const strikerId = match?.crease_state?.striker_id?._id || match?.crease_state?.striker_id;
+              const nonStrikerId = match?.crease_state?.non_striker_id?._id || match?.crease_state?.non_striker_id;
+
+              const suggestedBatters = (battingTeamPlaying || []).filter(p => {
+                if (!p) return false;
+                const id = (p._id || p).toString();
+                if (strikerId && strikerId.toString() === id) return false;
+                if (nonStrikerId && nonStrikerId.toString() === id) return false;
+                if (dismissedPlayerIds.has(id)) return false;
+                return true;
+              });
+
+              return suggestedBatters.map(p => {
+                const id = p._id || p;
+                const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
+                return <option key={id} value={id}>{name}</option>;
+              });
+            })()}
           </select>
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleNextBatter} disabled={actionLoading}>
             {actionLoading ? 'Setting...' : 'Send to Crease →'}
