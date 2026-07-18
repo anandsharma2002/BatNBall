@@ -415,7 +415,7 @@ const VisitorDashboard = () => {
         {/* Match Header Info */}
         <div className="glass" style={{
           padding: '1.5rem', marginBottom: '1.5rem',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
           flexWrap: 'wrap', gap: '1rem', position: 'relative',
           border: boundaryFlash === 'SIX' ? '2px solid var(--accent-color)' : boundaryFlash === 'FOUR' ? '2px solid #22c55e' : '1px solid var(--border-color)',
           boxShadow: boundaryFlash === 'SIX' ? '0 0 20px rgba(198,165,103,0.3)' : boundaryFlash === 'FOUR' ? '0 0 20px rgba(34,197,94,0.3)' : 'var(--shadow)',
@@ -521,10 +521,10 @@ const VisitorDashboard = () => {
                       const isOnStrike = b.id === strikerId;
                       return (
                         <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <span style={{ fontWeight: isOnStrike ? '800' : '500', color: isOnStrike ? 'var(--text-color)' : 'var(--text-muted)' }}>
+                          <span style={{ fontWeight: '500', color: 'var(--text-color)' }}>
                             {b.name}{isOnStrike ? '*' : '\u00a0'}
                           </span>
-                          <span style={{ color: isOnStrike ? 'var(--secondary-color)' : 'var(--text-muted)', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                             {b.runs} ({b.balls})
                           </span>
                         </div>
@@ -535,10 +535,10 @@ const VisitorDashboard = () => {
                   </div>
 
                   {/* Bowler — far right */}
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 'auto' }}>
                     {bowler ? (
                       <>
-                        <div style={{ fontWeight: '700', color: 'var(--text-color)' }}>
+                        <div style={{ fontWeight: '500', color: 'var(--text-color)' }}>
                           {bowler.name}
                         </div>
                         <div style={{ color: 'var(--accent-color)', fontSize: '0.82rem' }}>

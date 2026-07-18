@@ -477,9 +477,70 @@ const ScoringBoard = () => {
 
         {/* ── Scoreboard ─────────────────────────────────────────────────────── */}
         <div className="glass" style={{ padding: '1.5rem', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
+
+          {/* Batsmen + Bowler row */}
+          {creaseReady && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              marginBottom: '1rem', paddingBottom: '1rem',
+              borderBottom: '1px solid var(--border-color)',
+              fontSize: '0.88rem', lineHeight: '1.6'
+            }}>
+              {/* Left: batsmen in crease order */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.05rem' }}>
+                {[
+                  { player: striker, isStrike: true },
+                  { player: nonStriker, isStrike: false }
+                ].map(({ player, isStrike }) => {
+                  if (!player) return null;
+                  // Get live stats from balls
+                  const inningsBalls = balls.filter(b => b.innings_number === innings && (
+                    (b.striker_id?._id || b.striker_id)?.toString() === player._id?.toString() ||
+                    (b.non_striker_id?._id || b.non_striker_id)?.toString() === player._id?.toString()
+                  ));
+                  const battedBalls = inningsBalls.filter(b =>
+                    (b.striker_id?._id || b.striker_id)?.toString() === player._id?.toString() && b.is_legal_delivery
+                  );
+                  const runs = battedBalls.reduce((s, b) => s + (b.runs_from_bat || 0), 0);
+                  const ballsFaced = battedBalls.length;
+                  return (
+                    <div key={player._id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontWeight: '500', color: 'var(--text-color)' }}>
+                        {player.display_name}{isStrike ? '*' : '\u00a0'}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        {runs} ({ballsFaced})
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right: bowler stats */}
+              {bowler && (() => {
+                const bowlerBalls = balls.filter(b =>
+                  b.innings_number === innings &&
+                  (b.bowler_id?._id || b.bowler_id)?.toString() === bowler._id?.toString()
+                );
+                const bowlerRuns = bowlerBalls.reduce((s, b) => s + (b.runs_from_bat || 0) + (b.extra_runs || 0), 0);
+                const bowlerWickets = bowlerBalls.filter(b => b.dismissal?.is_wicket && !['RUN_OUT'].includes(b.dismissal?.wicket_type)).length;
+                const bowlerLegalBalls = bowlerBalls.filter(b => b.is_legal_delivery).length;
+                return (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '500', color: 'var(--text-color)' }}>{bowler.display_name}</div>
+                    <div style={{ color: 'var(--accent-color)', fontSize: '0.8rem' }}>
+                      {bowlerWickets}/{bowlerRuns} ({formatOvers(bowlerLegalBalls)})
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Score Pills */}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
             <ScorePill
-              label={match?.current_innings_batting_team_id?.team_short_name || 'TEAM'}
+              label={match?.current_innings_batting_team_id?.team_short_name || 'TEA'}
               value={`${currentInnings.score ?? 0}/${currentInnings.wickets ?? 0}`}
               sub={`${formatOvers(currentInnings.total_legal_balls ?? 0)} ov`}
             />
@@ -497,6 +558,12 @@ const ScoringBoard = () => {
               </>
             )}
             <ScorePill label="CRR" value={(currentInnings.total_legal_balls ? ((currentInnings.score / currentInnings.total_legal_balls) * 6).toFixed(2) : '0.00')} sub="curr rate" />
+            {innings === 2 && (() => {
+              const ballsLeft = Math.max(0, match?.total_overs_per_innings * 6 - (currentInnings.total_legal_balls ?? 0));
+              const runsLeft = Math.max(0, (match?.innings1?.score ?? 0) + 1 - (currentInnings.score ?? 0));
+              const rrr = ballsLeft > 0 ? ((runsLeft / ballsLeft) * 6).toFixed(2) : '–';
+              return <ScorePill label="RRR" value={rrr} sub="req rate" />;
+            })()}
           </div>
 
           {/* Recent balls */}
@@ -749,28 +816,61 @@ const ScoringBoard = () => {
         <ModalOverlay onClose={() => setShowInitModal(false)}>
           <h2 style={{ fontWeight: '800', marginBottom: '1.5rem' }}>Set Crease Positions</h2>
 
-          {[
-            { label: 'Striker (Opening Batter)', key: 'striker_id', players: battingTeamPlaying },
-            { label: 'Non-Striker', key: 'non_striker_id', players: battingTeamPlaying },
-            { label: 'Bowler', key: 'bowler_id', players: bowlingTeamPlaying }
-          ].map(({ label, key, players }) => (
-            <div key={key} style={{ marginBottom: '1rem' }}>
-              <label className="form-label">{label}</label>
-              <select
-                className="form-input"
-                value={initForm[key]}
-                onChange={e => setInitForm(prev => ({ ...prev, [key]: e.target.value }))}
-              >
-                <option value="">— Select Player —</option>
-                {(players || []).map(p => {
-                  if (!p) return null;
-                  const id = p._id || p;
-                  const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
-                  return <option key={id} value={id}>{name}</option>;
-                })}
-              </select>
-            </div>
-          ))}
+          {/* Striker — exclude whoever is picked as non-striker */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Striker (Opening Batter)</label>
+            <select
+              className="form-input"
+              value={initForm.striker_id}
+              onChange={e => setInitForm(prev => ({ ...prev, striker_id: e.target.value }))}
+            >
+              <option value="">— Select Player —</option>
+              {(battingTeamPlaying || []).map(p => {
+                if (!p) return null;
+                const id = (p._id || p).toString();
+                if (id === initForm.non_striker_id) return null; // already picked as non-striker
+                const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
+                return <option key={id} value={id}>{name}</option>;
+              })}
+            </select>
+          </div>
+
+          {/* Non-Striker — exclude whoever is picked as striker */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Non-Striker</label>
+            <select
+              className="form-input"
+              value={initForm.non_striker_id}
+              onChange={e => setInitForm(prev => ({ ...prev, non_striker_id: e.target.value }))}
+            >
+              <option value="">— Select Player —</option>
+              {(battingTeamPlaying || []).map(p => {
+                if (!p) return null;
+                const id = (p._id || p).toString();
+                if (id === initForm.striker_id) return null; // already picked as striker
+                const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
+                return <option key={id} value={id}>{name}</option>;
+              })}
+            </select>
+          </div>
+
+          {/* Bowler — always from bowling team, no conflict with batters */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Bowler</label>
+            <select
+              className="form-input"
+              value={initForm.bowler_id}
+              onChange={e => setInitForm(prev => ({ ...prev, bowler_id: e.target.value }))}
+            >
+              <option value="">— Select Player —</option>
+              {(bowlingTeamPlaying || []).map(p => {
+                if (!p) return null;
+                const id = (p._id || p).toString();
+                const name = typeof p === 'object' ? (p.display_name || `${p.first_name} ${p.last_name}`) : `Player ${p}`;
+                return <option key={id} value={id}>{name}</option>;
+              })}
+            </select>
+          </div>
 
           <button className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} onClick={handleInitialize} disabled={actionLoading}>
             {actionLoading ? 'Setting...' : 'Start Innings →'}
